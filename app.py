@@ -135,13 +135,13 @@ def stand_status(text):
     return "unklar"
 
 
-def berechne_zeile(vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text):
+def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text):
     partner_key = vertriebspartner.strip().lower()
     ergebnisse = []
 
     if partner_key not in TEAM_QUOTEN:
         return [{
-            "Vertriebspartner": vertriebspartner, "Produkt": produkt,
+            "Name Kunde": name_kunde, "Vertriebspartner": vertriebspartner, "Produkt": produkt,
             "Status": "nicht im Team", "WP": None, "Auszahlung (€)": None,
             "Hinweis": "Zählt nicht (kein Teammitglied)",
         }]
@@ -152,6 +152,7 @@ def berechne_zeile(vertriebspartner, produkt, beitrag_text, laufzeit_text, stand
         beitrag = parse_beitrag(teilbeitrag_text)
 
         zeile = {
+            "Name Kunde": name_kunde,
             "Vertriebspartner": vertriebspartner,
             "Produkt": teilprodukt,
             "Status": stand,
@@ -213,6 +214,7 @@ if uploaded is not None:
     alle_zeilen = []
     for _, row in df.iterrows():
         alle_zeilen.extend(berechne_zeile(
+            str(row.get("Name Kunde", "")),
             str(row.get("Vertriebspartner", "")),
             str(row.get("Produkt", row.get("Produkt ", ""))),
             row.get("Beitrag"),
