@@ -144,7 +144,7 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
     if partner_key not in TEAM_QUOTEN:
         return [{
             "Name Kunde": name_kunde, "Vertriebspartner": vertriebspartner, "Produkt": produkt,
-            "Status": "nicht im Team", "WP": None, "Auszahlung (€)": None,
+            "Beitrag (€)": None, "Status": "nicht im Team", "WP": None, "Auszahlung (€)": None,
             "Hinweis": "Zählt nicht (kein Teammitglied)",
         }]
 
@@ -157,6 +157,7 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
             "Name Kunde": name_kunde,
             "Vertriebspartner": vertriebspartner,
             "Produkt": teilprodukt,
+            "Beitrag (€)": None,
             "Status": stand,
             "WP": None,
             "Auszahlung (€)": None,
@@ -197,6 +198,7 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
         differenz_quote = ADELE_QUOTE - eigene_quote if partner_key != "adel" else ADELE_QUOTE
         auszahlung = wp * VOLLWERT_PRO_WP * differenz_quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
 
+        zeile["Beitrag (€)"] = round(beitrag * multiplikator, 2)
         zeile["WP"] = round(wp, 2)
         zeile["Auszahlung (€)"] = round(auszahlung, 2)
         ergebnisse.append(zeile)
@@ -288,10 +290,11 @@ if df is not None:
     ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
     ergebnis_df = ergebnis_df.sort_values(["Vertriebspartner", "Name Kunde"]).reset_index(drop=True)
 
-    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Produkt", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    berechnet = ergebnis_df[ergebnis_df["Auszahlung (€)"].notna()].copy()
+
+    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
     ergebnis_df = ergebnis_df[spalten_reihenfolge]
 
-    berechnet = ergebnis_df[ergebnis_df["Auszahlung (€)"].notna()]
     gesamt = berechnet["Auszahlung (€)"].sum()
     gesamt_wp = berechnet["WP"].sum()
 
@@ -301,6 +304,7 @@ if df is not None:
     col3.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
 
     spalten_config = {
+        "Beitrag (€)": st.column_config.NumberColumn("Beitrag (€)", format="%.2f €"),
         "WP": st.column_config.NumberColumn("WP", format="%.2f"),
         "Auszahlung (€)": st.column_config.NumberColumn("Auszahlung aufs Konto (€)", format="%.2f €"),
     }
@@ -312,5 +316,34 @@ if df is not None:
     if not offene.empty:
         st.subheader("⚠️ Zeilen, die ich nicht automatisch berechnen konnte")
         st.dataframe(offene, use_container_width=True, hide_index=True, column_config=spalten_config)
+
+    st.divider()
+    st.subheader("📅 Monatsübersicht pro Kunde")
+    st.caption("Nur gezählte Geschäfte. Zum Monatsende in deine Bestandskunden-Tabelle übertragen.")
+
+    monatsuebersicht = (
+        berechnet.groupby("Name Kunde", as_index=False)
+        .agg(**{"Umsatz (€)": ("Beitrag (€)", "sum"), "WP": ("WP", "sum")})
+        .sort_values("Name Kunde")
+        .reset_index(drop=True)
+    )
+
+    st.dataframe(
+        monatsuebersicht,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Umsatz (€)": st.column_config.NumberColumn("Umsatz (€)", format="%.2f €"),
+            "WP": st.column_config.NumberColumn("WP", format="%.2f"),
+        },
+    )
+
+    monat_name = pd.Timestamp.today().strftime("%Y-%m")
+    st.download_button(
+        "⬇️ Monatsübersicht als CSV herunterladen",
+        monatsuebersicht.to_csv(index=False).encode("utf-8"),
+        file_name=f"monatsuebersicht_{monat_name}.csv",
+        mime="text/csv",
+    )
 else:
     st.info("Lade deine CSV-Datei hoch oder richte die Google-Tabellen-Anbindung ein, um loszulegen.")
