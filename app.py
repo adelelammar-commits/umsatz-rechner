@@ -1,5 +1,6 @@
-import io
+import base64
 import re
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -203,14 +204,41 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
     return ergebnisse
 
 
-col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
-with col_logo:
-    st.image("logo.png")
-with col_title:
-    st.title("Umsatz Rechner")
-    st.caption("Liest deine Geschäfts-Übersicht ein und berechnet Wohlstandspunkte (WP) + Auszahlung automatisch.")
+LOGO_BASE64 = base64.b64encode(Path("logo.png").read_bytes()).decode()
 
-st.divider()
+st.markdown(
+    f"""
+    <style>
+    div[data-testid="stMetric"] {{
+        background-color: #F7F1EA;
+        border: 1px solid #E7D7C2;
+        border-radius: 14px;
+        padding: 16px 20px;
+    }}
+    div[data-testid="stMetricLabel"] {{
+        color: #8A5E33;
+    }}
+    </style>
+    <div style="
+        background: linear-gradient(135deg, #B17946, #543719);
+        padding: 24px 32px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        margin-bottom: 28px;
+    ">
+        <img src="data:image/png;base64,{LOGO_BASE64}" style="width:64px; height:64px; border-radius:12px;">
+        <div>
+            <div style="color:white; font-size:30px; font-weight:700; line-height:1.2;">Umsatz Rechner</div>
+            <div style="color:#F3E4D3; font-size:14px; margin-top:4px;">
+                Liest deine Geschäfts-Übersicht ein und berechnet Wohlstandspunkte (WP) + Auszahlung automatisch.
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 SHEET_CSV_URL = st.secrets.get("SHEET_CSV_URL", "")
 
