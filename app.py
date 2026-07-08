@@ -4,7 +4,7 @@ import re
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Umsatz Rechner", layout="wide")
+st.set_page_config(page_title="K&W Umsatz Rechner", page_icon="logo.png", layout="wide")
 
 
 def check_password():
@@ -202,8 +202,14 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
     return ergebnisse
 
 
-st.title("💶 Umsatz Rechner")
-st.caption("Liest deine Geschäfts-Übersicht ein und berechnet Wohlstandspunkte (WP) + Auszahlung automatisch.")
+col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
+with col_logo:
+    st.image("logo.png")
+with col_title:
+    st.title("Umsatz Rechner")
+    st.caption("Liest deine Geschäfts-Übersicht ein und berechnet Wohlstandspunkte (WP) + Auszahlung automatisch.")
+
+st.divider()
 
 SHEET_CSV_URL = st.secrets.get("SHEET_CSV_URL", "")
 
@@ -245,21 +251,37 @@ if df is not None:
 
     ergebnis_df = pd.DataFrame(alle_zeilen)
 
-    st.subheader("Ergebnis pro Zeile")
-    st.dataframe(ergebnis_df, use_container_width=True)
+    STATUS_LABEL = {
+        "zaehlt": "✅ Zählt",
+        "unklar": "⚠️ Unklar",
+        "nicht im Team": "🚫 Kein Teammitglied",
+    }
+    ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
+    ergebnis_df = ergebnis_df.sort_values(["Vertriebspartner", "Name Kunde"]).reset_index(drop=True)
+
+    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Produkt", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    ergebnis_df = ergebnis_df[spalten_reihenfolge]
 
     berechnet = ergebnis_df[ergebnis_df["Auszahlung (€)"].notna()]
     gesamt = berechnet["Auszahlung (€)"].sum()
     gesamt_wp = berechnet["WP"].sum()
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Gesamt-WP", f"{gesamt_wp:.2f}")
+    col1.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
     col2.metric("Gesamt-Auszahlung", f"{gesamt:,.2f} €")
     col3.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
+
+    spalten_config = {
+        "WP": st.column_config.NumberColumn("WP", format="%.2f"),
+        "Auszahlung (€)": st.column_config.NumberColumn("Auszahlung (€)", format="%.2f €"),
+    }
+
+    st.subheader("Ergebnis pro Zeile")
+    st.dataframe(ergebnis_df, use_container_width=True, hide_index=True, column_config=spalten_config)
 
     offene = ergebnis_df[ergebnis_df["Hinweis"] != ""]
     if not offene.empty:
         st.subheader("⚠️ Zeilen, die ich nicht automatisch berechnen konnte")
-        st.dataframe(offene, use_container_width=True)
+        st.dataframe(offene, use_container_width=True, hide_index=True, column_config=spalten_config)
 else:
     st.info("Lade deine CSV-Datei hoch oder richte die Google-Tabellen-Anbindung ein, um loszulegen.")
