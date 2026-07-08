@@ -34,6 +34,7 @@ if not check_password():
 
 VOLLWERT_PRO_WP = 43.0  # 4,3% * 1000, entspricht 100% Quote
 GESAMTUMSATZ_ABZUG = 0.75  # 25% werden immer abgezogen, 75% bleiben übrig
+STORNORESERVE_ABZUG = 0.90  # 10% Stornoreserve auf jedes Geschäft, für alle gleich, bleiben 90% übrig
 ADELE_QUOTE = 0.80  # Adeles Stufe 5
 
 # Team: Name -> eigene Quote (für Differenz-Berechnung). Nur diese Personen zählen.
@@ -193,7 +194,7 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
 
         eigene_quote = TEAM_QUOTEN[partner_key]
         differenz_quote = ADELE_QUOTE - eigene_quote if partner_key != "adel" else ADELE_QUOTE
-        auszahlung = wp * VOLLWERT_PRO_WP * differenz_quote * GESAMTUMSATZ_ABZUG
+        auszahlung = wp * VOLLWERT_PRO_WP * differenz_quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
 
         zeile["WP"] = round(wp, 2)
         zeile["Auszahlung (€)"] = round(auszahlung, 2)
@@ -268,12 +269,12 @@ if df is not None:
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
-    col2.metric("Gesamt-Auszahlung", f"{gesamt:,.2f} €")
+    col2.metric("Gesamt-Auszahlung aufs Konto", f"{gesamt:,.2f} €")
     col3.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
 
     spalten_config = {
         "WP": st.column_config.NumberColumn("WP", format="%.2f"),
-        "Auszahlung (€)": st.column_config.NumberColumn("Auszahlung (€)", format="%.2f €"),
+        "Auszahlung (€)": st.column_config.NumberColumn("Auszahlung aufs Konto (€)", format="%.2f €"),
     }
 
     st.subheader("Ergebnis pro Zeile")
