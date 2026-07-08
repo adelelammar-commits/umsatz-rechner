@@ -205,10 +205,31 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
 st.title("💶 Umsatz Rechner")
 st.caption("Liest deine Geschäfts-Übersicht ein und berechnet Wohlstandspunkte (WP) + Auszahlung automatisch.")
 
-uploaded = st.file_uploader("CSV-Datei hochladen", type=["csv"])
+SHEET_CSV_URL = st.secrets.get("SHEET_CSV_URL", "")
 
-if uploaded is not None:
-    df = pd.read_csv(uploaded)
+
+@st.cache_data(ttl=60)
+def lade_google_sheet(url):
+    return pd.read_csv(url)
+
+
+df = None
+
+if SHEET_CSV_URL:
+    if st.button("🔄 Aktualisieren"):
+        lade_google_sheet.clear()
+    try:
+        df = lade_google_sheet(SHEET_CSV_URL)
+        st.success("Daten aus der Google-Tabelle geladen (aktualisiert sich automatisch alle 60 Sekunden).")
+    except Exception as e:
+        st.error(f"Konnte die Google-Tabelle nicht laden: {e}")
+
+with st.expander("Stattdessen CSV-Datei manuell hochladen"):
+    uploaded = st.file_uploader("CSV-Datei hochladen", type=["csv"])
+    if uploaded is not None:
+        df = pd.read_csv(uploaded)
+
+if df is not None:
     df.columns = [c.strip() for c in df.columns]
 
     alle_zeilen = []
@@ -241,4 +262,4 @@ if uploaded is not None:
         st.subheader("⚠️ Zeilen, die ich nicht automatisch berechnen konnte")
         st.dataframe(offene, use_container_width=True)
 else:
-    st.info("Lade deine CSV-Datei hoch, um loszulegen.")
+    st.info("Lade deine CSV-Datei hoch oder richte die Google-Tabellen-Anbindung ein, um loszulegen.")
