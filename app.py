@@ -32,9 +32,10 @@ if not check_password():
 
 # --- Fachliche Konstanten (K&W Wohlstandspunkte-System) ---
 # Quelle: Canva-Kickoff-Präsentation "K&W - Kick Off 27.06.2026" + Angaben von Adele.
+# Update 2026-09-08: Provisionssatz und Gesamtumsatz-Abzug angepasst, gilt für alle Stufen/Partner.
 
-VOLLWERT_PRO_WP = 43.0  # 4,3% * 1000, entspricht 100% Quote
-GESAMTUMSATZ_ABZUG = 0.75  # 25% werden immer abgezogen, 75% bleiben übrig
+VOLLWERT_PRO_WP = 44.0  # 4,4% * 1000, entspricht 100% Quote (vorher 4,3%)
+GESAMTUMSATZ_ABZUG = 0.90  # 10% werden abgezogen, 90% bleiben übrig (vorher 25% Abzug/75%)
 STORNORESERVE_ABZUG = 0.90  # 10% Stornoreserve auf jedes Geschäft, für alle gleich, bleiben 90% übrig
 ADELE_QUOTE = 0.80  # Adeles Stufe 5
 
