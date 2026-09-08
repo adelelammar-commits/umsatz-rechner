@@ -6,7 +6,7 @@ import streamlit as st
 
 import formeln
 
-st.set_page_config(page_title="K&W Umsatz Rechner", page_icon="logo.png", layout="wide")
+st.set_page_config(page_title="Mein Umsatz", page_icon="logo.png", layout="wide")
 
 
 def check_password():
@@ -31,52 +31,13 @@ def check_password():
 if not check_password():
     st.stop()
 
-# Fachliche Konstanten/Formeln liegen in formeln.py (gemeinsam mit mein_umsatz.py genutzt).
-ADELE_QUOTE = 0.80  # Adeles Stufe 5
-
-# Team: Name -> eigene Quote (für Differenz-Berechnung). Nur diese Personen zählen.
-TEAM_QUOTEN = {
-    "adel": ADELE_QUOTE,       # Eigengeschäft
-    "emirhan": 0.80,           # gleiche Stufe wie Adele -> 0 Differenz
-    "seher": 0.675,
-    "büsra": 0.37,             # Stufe 2
-    "busra": 0.37,             # ohne Umlaut, falls so geschrieben
-    "birtan": 0.55,
-    "ikram": 0.20,
-    "mahdi": 0.55,
-}
-
-# Sonderfälle, bei denen Adeles Anteil NICHT der normalen Differenz-Formel
-# (ADELE_QUOTE - eigene_quote) folgt, sondern direkt festgelegt ist.
-ADELE_ANTEIL_OVERRIDE = {
-    "mahdi": 0.125,   # geteiltes Overhead mit einer weiteren Person -> nur halbe Differenz (12,5% statt 25%)
-    "büsra": 0.215,   # geteiltes Overhead -> nur halbe Differenz (80%-37%=43% -> 21,5% statt 43%)
-    "busra": 0.215,   # ohne Umlaut, falls so geschrieben
-    # Seher braucht keinen Override: 80% - 67,5% = 12,5% ergibt sich schon aus der normalen Formel.
-}
-
-def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat=""):
-    partner_key = vertriebspartner.strip().lower()
-
-    if partner_key not in TEAM_QUOTEN:
-        return [{
-            "Name Kunde": name_kunde, "Vertriebspartner": vertriebspartner, "Produkt": produkt,
-            "Monat": monat, "Beitrag (€)": None, "Status": "nicht im Team", "WP": None, "Auszahlung (€)": None,
-            "Hinweis": "Zählt nicht (kein Teammitglied)",
-        }]
-
-    if partner_key in ADELE_ANTEIL_OVERRIDE:
-        quote = ADELE_ANTEIL_OVERRIDE[partner_key]
-    elif partner_key == "adel":
-        quote = ADELE_QUOTE
-    else:
-        quote = ADELE_QUOTE - TEAM_QUOTEN[partner_key]
-
-    zeilen = formeln.berechne_positionen(name_kunde, quote, produkt, beitrag_text, laufzeit_text, stand_text, monat)
-    for zeile in zeilen:
-        zeile["Vertriebspartner"] = vertriebspartner
-    return zeilen
-
+# Diese App zeigt IMMER nur die eigene, volle Vergütung einer einzelnen Person auf ihrer
+# eigenen Karrierestufe -- kein Team-/Differenz-Modell wie in Adeles app.py. Name, Quote,
+# Google-Tabelle und Passwort kommen pro Person aus den Streamlit-Secrets dieser Deployment-
+# Instanz, damit jede Person eine eigene, komplett getrennte App-Instanz bekommt und
+# niemand die Zahlen einer anderen Person sehen kann.
+MITARBEITER_NAME = st.secrets.get("MITARBEITER_NAME", "Mein")
+MITARBEITER_QUOTE = float(st.secrets.get("MITARBEITER_QUOTE", 0))
 
 LOGO_BASE64 = base64.b64encode(Path("logo.png").read_bytes()).decode()
 
@@ -104,15 +65,19 @@ st.markdown(
     ">
         <img src="data:image/png;base64,{LOGO_BASE64}" style="width:64px; height:64px; border-radius:12px;">
         <div>
-            <div style="color:white; font-size:30px; font-weight:700; line-height:1.2;">Umsatz Rechner</div>
+            <div style="color:white; font-size:30px; font-weight:700; line-height:1.2;">{MITARBEITER_NAME}s Umsatz</div>
             <div style="color:#F3E4D3; font-size:14px; margin-top:4px;">
-                Liest deine Geschäfts-Übersicht ein und berechnet Wohlstandspunkte (WP) + Auszahlung automatisch.
+                Deine eigene Geschäfts-Übersicht: Wohlstandspunkte (WP) + deine eigene Vergütung, automatisch berechnet.
             </div>
         </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
+if MITARBEITER_QUOTE <= 0:
+    st.error("Es ist noch keine eigene Quote (MITARBEITER_QUOTE) in den Secrets hinterlegt.")
+    st.stop()
 
 SHEET_CSV_URL = st.secrets.get("SHEET_CSV_URL", "")
 
@@ -129,7 +94,7 @@ if SHEET_CSV_URL:
         lade_google_sheet.clear()
     try:
         df = lade_google_sheet(SHEET_CSV_URL)
-        st.success("Daten aus der Google-Tabelle geladen (aktualisiert sich automatisch alle 60 Sekunden).")
+        st.success("Daten aus deiner Google-Tabelle geladen (aktualisiert sich automatisch alle 60 Sekunden).")
     except Exception as e:
         st.error(f"Konnte die Google-Tabelle nicht laden: {e}")
 
@@ -143,9 +108,9 @@ if df is not None:
 
     alle_zeilen = []
     for _, row in df.iterrows():
-        alle_zeilen.extend(berechne_zeile(
+        alle_zeilen.extend(formeln.berechne_positionen(
             str(row.get("Name Kunde", "")),
-            str(row.get("Vertriebspartner", "")),
+            MITARBEITER_QUOTE,
             str(row.get("Produkt", row.get("Produkt ", ""))),
             row.get("Beitrag"),
             row.get("Laufzeit"),
@@ -154,7 +119,7 @@ if df is not None:
         ))
 
     ergebnis_df = pd.DataFrame(alle_zeilen)
-    ergebnis_df = ergebnis_df.sort_values(["Vertriebspartner", "Name Kunde"]).reset_index(drop=True)
+    ergebnis_df = ergebnis_df.sort_values(["Name Kunde"]).reset_index(drop=True)
 
     monate_vorhanden = sorted(m for m in ergebnis_df["Monat"].unique() if m)
     monat_auswahl = st.selectbox("📅 Monat", ["Alle Monate"] + monate_vorhanden)
@@ -174,11 +139,10 @@ if df is not None:
         "eingereicht": "🟡 Eingereicht",
         "policiert": "✅ Policiert",
         "unklar": "⚠️ Unklar",
-        "nicht im Team": "🚫 Kein Teammitglied",
     }
     ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
 
-    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    spalten_reihenfolge = ["Name Kunde", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
     ergebnis_df = ergebnis_df[spalten_reihenfolge]
 
     st.metric("💰 Gesamt-Vergütung (offen + eingereicht + policiert)", f"{gesamt:,.2f} €")
@@ -188,9 +152,7 @@ if df is not None:
     col2.metric("🟡 Ausstehende Vergütung (eingereicht)", f"{ausstehend:,.2f} €")
     col3.metric("🔵 Vergütung offenes Geschäft", f"{offen_summe:,.2f} €")
 
-    col4, col5 = st.columns(2)
-    col4.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
-    col5.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
+    st.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
 
     spalten_config = {
         "Beitrag (€)": st.column_config.NumberColumn("Beitrag (€)", format="%.2f €"),
@@ -205,35 +167,5 @@ if df is not None:
     if not offene.empty:
         st.subheader("⚠️ Zeilen, die ich nicht automatisch berechnen konnte")
         st.dataframe(offene, use_container_width=True, hide_index=True, column_config=spalten_config)
-
-    st.divider()
-    st.subheader("📅 Monatsübersicht pro Kunde")
-    st.caption("Nur policiertes (sicheres) Geschäft. Zum Monatsende in deine Bestandskunden-Tabelle übertragen.")
-
-    monatsuebersicht = (
-        berechnet[berechnet["Status"] == "policiert"]
-        .groupby("Name Kunde", as_index=False)
-        .agg(**{"Umsatz (€)": ("Beitrag (€)", "sum"), "WP": ("WP", "sum")})
-        .sort_values("Name Kunde")
-        .reset_index(drop=True)
-    )
-
-    st.dataframe(
-        monatsuebersicht,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Umsatz (€)": st.column_config.NumberColumn("Umsatz (€)", format="%.2f €"),
-            "WP": st.column_config.NumberColumn("WP", format="%.2f"),
-        },
-    )
-
-    monat_name = pd.Timestamp.today().strftime("%Y-%m")
-    st.download_button(
-        "⬇️ Monatsübersicht als CSV herunterladen",
-        monatsuebersicht.to_csv(index=False).encode("utf-8"),
-        file_name=f"monatsuebersicht_{monat_name}.csv",
-        mime="text/csv",
-    )
 else:
     st.info("Lade deine CSV-Datei hoch oder richte die Google-Tabellen-Anbindung ein, um loszulegen.")
