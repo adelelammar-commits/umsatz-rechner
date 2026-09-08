@@ -141,18 +141,18 @@ def produkt_kategorie(produkt_name):
     return "unbekannt"
 
 
-STAND_POSITIV_KEYWORDS = ["eingereicht", "unterschrieben", "policiert", "abgeschickt"]
-STAND_UNKLAR_KEYWORDS = ["?", "termin", "angebot"]
+# Seit 2026-09-08: Die "Stand"-Spalte akzeptiert nur noch genau eines dieser drei Wörter.
+# Alles andere (alte Freitexte wie "unterschrieben", "Termin nächste Woche?" etc.) zählt
+# nicht mehr und wird als "unklar" behandelt.
+STAND_STUFEN = ["offen", "eingereicht", "policiert"]
 
 
 def stand_status(text):
     if not isinstance(text, str) or not text.strip():
         return "unklar"
-    t = text.lower()
-    if any(k in t for k in STAND_UNKLAR_KEYWORDS):
-        return "unklar"
-    if any(k in t for k in STAND_POSITIV_KEYWORDS):
-        return "zaehlt"
+    t = text.strip().lower()
+    if t in STAND_STUFEN:
+        return t
     return "unklar"
 
 
@@ -191,8 +191,8 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
             zeile["Hinweis"] = "Unbekanntes Produkt – bitte Formel klären"
             ergebnisse.append(zeile)
             continue
-        if stand != "zaehlt":
-            zeile["Hinweis"] = "Status noch nicht vergütungsfähig"
+        if stand == "unklar":
+            zeile["Hinweis"] = "Status nicht erkannt (nur offen/eingereicht/policiert werden gewertet)"
             ergebnisse.append(zeile)
             continue
         if beitrag is None:
@@ -318,27 +318,38 @@ if df is not None:
         ))
 
     ergebnis_df = pd.DataFrame(alle_zeilen)
-
-    STATUS_LABEL = {
-        "zaehlt": "✅ Zählt",
-        "unklar": "⚠️ Unklar",
-        "nicht im Team": "🚫 Kein Teammitglied",
-    }
-    ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
     ergebnis_df = ergebnis_df.sort_values(["Vertriebspartner", "Name Kunde"]).reset_index(drop=True)
 
     berechnet = ergebnis_df[ergebnis_df["Auszahlung (€)"].notna()].copy()
 
-    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
-    ergebnis_df = ergebnis_df[spalten_reihenfolge]
-
+    sicher = berechnet[berechnet["Status"] == "policiert"]["Auszahlung (€)"].sum()
+    ausstehend = berechnet[berechnet["Status"] == "eingereicht"]["Auszahlung (€)"].sum()
+    offen_summe = berechnet[berechnet["Status"] == "offen"]["Auszahlung (€)"].sum()
     gesamt = berechnet["Auszahlung (€)"].sum()
     gesamt_wp = berechnet["WP"].sum()
 
+    STATUS_LABEL = {
+        "offen": "🔵 Offen",
+        "eingereicht": "🟡 Eingereicht",
+        "policiert": "✅ Policiert",
+        "unklar": "⚠️ Unklar",
+        "nicht im Team": "🚫 Kein Teammitglied",
+    }
+    ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
+
+    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    ergebnis_df = ergebnis_df[spalten_reihenfolge]
+
+    st.metric("💰 Gesamt-Vergütung (offen + eingereicht + policiert)", f"{gesamt:,.2f} €")
+
     col1, col2, col3 = st.columns(3)
-    col1.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
-    col2.metric("Gesamt-Auszahlung aufs Konto", f"{gesamt:,.2f} €")
-    col3.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
+    col1.metric("✅ Sichere Auszahlung (policiert)", f"{sicher:,.2f} €")
+    col2.metric("🟡 Ausstehende Vergütung (eingereicht)", f"{ausstehend:,.2f} €")
+    col3.metric("🔵 Vergütung offenes Geschäft", f"{offen_summe:,.2f} €")
+
+    col4, col5 = st.columns(2)
+    col4.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
+    col5.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
 
     spalten_config = {
         "Beitrag (€)": st.column_config.NumberColumn("Beitrag (€)", format="%.2f €"),
@@ -356,10 +367,11 @@ if df is not None:
 
     st.divider()
     st.subheader("📅 Monatsübersicht pro Kunde")
-    st.caption("Nur gezählte Geschäfte. Zum Monatsende in deine Bestandskunden-Tabelle übertragen.")
+    st.caption("Nur policiertes (sicheres) Geschäft. Zum Monatsende in deine Bestandskunden-Tabelle übertragen.")
 
     monatsuebersicht = (
-        berechnet.groupby("Name Kunde", as_index=False)
+        berechnet[berechnet["Status"] == "policiert"]
+        .groupby("Name Kunde", as_index=False)
         .agg(**{"Umsatz (€)": ("Beitrag (€)", "sum"), "WP": ("WP", "sum")})
         .sort_values("Name Kunde")
         .reset_index(drop=True)
