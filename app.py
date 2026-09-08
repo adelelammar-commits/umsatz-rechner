@@ -156,14 +156,14 @@ def stand_status(text):
     return "unklar"
 
 
-def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text):
+def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat=""):
     partner_key = vertriebspartner.strip().lower()
     ergebnisse = []
 
     if partner_key not in TEAM_QUOTEN:
         return [{
             "Name Kunde": name_kunde, "Vertriebspartner": vertriebspartner, "Produkt": produkt,
-            "Beitrag (€)": None, "Status": "nicht im Team", "WP": None, "Auszahlung (€)": None,
+            "Monat": monat, "Beitrag (€)": None, "Status": "nicht im Team", "WP": None, "Auszahlung (€)": None,
             "Hinweis": "Zählt nicht (kein Teammitglied)",
         }]
 
@@ -176,6 +176,7 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
             "Name Kunde": name_kunde,
             "Vertriebspartner": vertriebspartner,
             "Produkt": teilprodukt,
+            "Monat": monat,
             "Beitrag (€)": None,
             "Status": stand,
             "WP": None,
@@ -315,10 +316,16 @@ if df is not None:
             row.get("Beitrag"),
             row.get("Laufzeit"),
             row.get("Stand"),
+            str(row.get("Monat", "")).strip(),
         ))
 
     ergebnis_df = pd.DataFrame(alle_zeilen)
     ergebnis_df = ergebnis_df.sort_values(["Vertriebspartner", "Name Kunde"]).reset_index(drop=True)
+
+    monate_vorhanden = sorted(m for m in ergebnis_df["Monat"].unique() if m)
+    monat_auswahl = st.selectbox("📅 Monat", ["Alle Monate"] + monate_vorhanden)
+    if monat_auswahl != "Alle Monate":
+        ergebnis_df = ergebnis_df[ergebnis_df["Monat"] == monat_auswahl].reset_index(drop=True)
 
     berechnet = ergebnis_df[ergebnis_df["Auszahlung (€)"].notna()].copy()
 
@@ -337,7 +344,7 @@ if df is not None:
     }
     ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
 
-    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
     ergebnis_df = ergebnis_df[spalten_reihenfolge]
 
     st.metric("💰 Gesamt-Vergütung (offen + eingereicht + policiert)", f"{gesamt:,.2f} €")
