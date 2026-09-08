@@ -57,7 +57,7 @@ ADELE_ANTEIL_OVERRIDE = {
     "mahdi": 0.125,   # geteiltes Overhead mit einer weiteren Person -> nur halbe Differenz (12,5% statt 25%)
     "büsra": 0.215,   # geteiltes Overhead -> nur halbe Differenz (80%-37%=43% -> 21,5% statt 43%)
     "busra": 0.215,   # ohne Umlaut, falls so geschrieben
-    "seher": 0.0625,  # geteiltes Overhead -> nur halbe Differenz (80%-67,5%=12,5% -> 6,25% statt 12,5%)
+    # Seher braucht keinen Override: 80% - 67,5% = 12,5% ergibt sich schon aus der normalen Formel.
 }
 
 LEBEN_PRODUKTE = {"bu", "pav", "bav", "rürup", "ruerup", "kidspolice"}
