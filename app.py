@@ -44,8 +44,8 @@ TEAM_QUOTEN = {
     "adel": ADELE_QUOTE,       # Eigengeschäft
     "emirhan": 0.80,           # gleiche Stufe wie Adele -> 0 Differenz
     "seher": 0.675,
-    "büsra": 0.675,
-    "busra": 0.675,            # ohne Umlaut, falls so geschrieben
+    "büsra": 0.37,             # Stufe 2
+    "busra": 0.37,             # ohne Umlaut, falls so geschrieben
     "birtan": 0.55,
     "ikram": 0.20,
     "mahdi": 0.55,
@@ -54,7 +54,10 @@ TEAM_QUOTEN = {
 # Sonderfälle, bei denen Adeles Anteil NICHT der normalen Differenz-Formel
 # (ADELE_QUOTE - eigene_quote) folgt, sondern direkt festgelegt ist.
 ADELE_ANTEIL_OVERRIDE = {
-    "mahdi": 0.125,  # geteiltes Overhead mit einer weiteren Person -> nur halbe Differenz (12,5% statt 25%)
+    "mahdi": 0.125,   # geteiltes Overhead mit einer weiteren Person -> nur halbe Differenz (12,5% statt 25%)
+    "büsra": 0.215,   # geteiltes Overhead -> nur halbe Differenz (80%-37%=43% -> 21,5% statt 43%)
+    "busra": 0.215,   # ohne Umlaut, falls so geschrieben
+    "seher": 0.0625,  # geteiltes Overhead -> nur halbe Differenz (80%-67,5%=12,5% -> 6,25% statt 12,5%)
 }
 
 LEBEN_PRODUKTE = {"bu", "pav", "bav", "rürup", "ruerup", "kidspolice"}
