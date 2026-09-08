@@ -39,6 +39,14 @@ GESAMTUMSATZ_ABZUG = 0.90  # 10% werden abgezogen, 90% bleiben übrig (vorher 25
 STORNORESERVE_ABZUG = 0.90  # 10% Stornoreserve auf jedes Geschäft, für alle gleich, bleiben 90% übrig
 ADELE_QUOTE = 0.80  # Adeles Stufe 5
 
+# KV (Krankenversicherung) hat seit 2026-09-08 eine eigene Vergütungsformel, komplett
+# losgelöst vom WP/Bewertungssumme-Modell der anderen Sparten:
+# Auszahlung = KV_MONATSBEITRAEGE_100 * Quote * (Bruttobeitrag - KV_NETTO_ABZUG) * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
+# WP wird trotzdem weiter aus dem Bruttobeitrag berechnet (Bruttobeitrag / 6), rein für die
+# Karrierestufen-Statistik -- hat keinen Einfluss mehr auf die Auszahlung.
+KV_NETTO_ABZUG = 50.0       # vom Bruttobeitrag abgezogen, um den (vereinfachten) Nettobeitrag zu schätzen
+KV_MONATSBEITRAEGE_100 = 9.0  # Monatsbeiträge Provision bei 100% Quote (Adele bei 80% Quote: 7,2 MB)
+
 # Team: Name -> eigene Quote (für Differenz-Berechnung). Nur diese Personen zählen.
 TEAM_QUOTEN = {
     "adel": ADELE_QUOTE,       # Eigengeschäft
@@ -194,6 +202,13 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
 
         multiplikator, _ = produkt_multiplikator_und_name(teilprodukt)
 
+        if partner_key in ADELE_ANTEIL_OVERRIDE:
+            differenz_quote = ADELE_ANTEIL_OVERRIDE[partner_key]
+        elif partner_key == "adel":
+            differenz_quote = ADELE_QUOTE
+        else:
+            differenz_quote = ADELE_QUOTE - TEAM_QUOTEN[partner_key]
+
         if kategorie == "leben":
             jahre, unklar = parse_laufzeit_jahre(laufzeit_text)
             if unklar:
@@ -202,16 +217,23 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
                 continue
             bws = beitrag * 12 * jahre
             wp = (bws / 1000) * multiplikator
-        else:  # sach oder kranken
+            auszahlung = wp * VOLLWERT_PRO_WP * differenz_quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
+        elif kategorie == "kranken":
+            # Eigene Formel seit 2026-09-08: nicht über WP/VOLLWERT_PRO_WP, sondern direkt
+            # in Monatsbeiträgen auf den (vereinfachten) Nettobeitrag gerechnet.
+            wp = (beitrag / 6) * multiplikator  # nur für Karrierestufen-Statistik, kein Einfluss auf Auszahlung
+            nettobeitrag = beitrag - KV_NETTO_ABZUG
+            if nettobeitrag <= 0:
+                zeile["Hinweis"] = "Bruttobeitrag zu niedrig für Netto-Abzug (50€) – bitte prüfen"
+                ergebnisse.append(zeile)
+                continue
+            auszahlung = (
+                KV_MONATSBEITRAEGE_100 * differenz_quote * nettobeitrag * multiplikator
+                * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
+            )
+        else:  # sach
             wp = (beitrag / 6) * multiplikator
-
-        if partner_key in ADELE_ANTEIL_OVERRIDE:
-            differenz_quote = ADELE_ANTEIL_OVERRIDE[partner_key]
-        elif partner_key == "adel":
-            differenz_quote = ADELE_QUOTE
-        else:
-            differenz_quote = ADELE_QUOTE - TEAM_QUOTEN[partner_key]
-        auszahlung = wp * VOLLWERT_PRO_WP * differenz_quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
+            auszahlung = wp * VOLLWERT_PRO_WP * differenz_quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
 
         zeile["Beitrag (€)"] = round(beitrag * multiplikator, 2)
         zeile["WP"] = round(wp, 2)
