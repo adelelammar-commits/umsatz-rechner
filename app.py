@@ -48,6 +48,13 @@ TEAM_QUOTEN = {
     "busra": 0.675,            # ohne Umlaut, falls so geschrieben
     "birtan": 0.55,
     "ikram": 0.20,
+    "mahdi": 0.55,
+}
+
+# Sonderfälle, bei denen Adeles Anteil NICHT der normalen Differenz-Formel
+# (ADELE_QUOTE - eigene_quote) folgt, sondern direkt festgelegt ist.
+ADELE_ANTEIL_OVERRIDE = {
+    "mahdi": 0.125,  # geteiltes Overhead mit einer weiteren Person -> nur halbe Differenz (12,5% statt 25%)
 }
 
 LEBEN_PRODUKTE = {"bu", "pav", "bav", "rürup", "ruerup", "kidspolice"}
@@ -195,8 +202,12 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
         else:  # sach oder kranken
             wp = (beitrag / 6) * multiplikator
 
-        eigene_quote = TEAM_QUOTEN[partner_key]
-        differenz_quote = ADELE_QUOTE - eigene_quote if partner_key != "adel" else ADELE_QUOTE
+        if partner_key in ADELE_ANTEIL_OVERRIDE:
+            differenz_quote = ADELE_ANTEIL_OVERRIDE[partner_key]
+        elif partner_key == "adel":
+            differenz_quote = ADELE_QUOTE
+        else:
+            differenz_quote = ADELE_QUOTE - TEAM_QUOTEN[partner_key]
         auszahlung = wp * VOLLWERT_PRO_WP * differenz_quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
 
         zeile["Beitrag (€)"] = round(beitrag * multiplikator, 2)
