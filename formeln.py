@@ -36,6 +36,8 @@ STAND_STUFEN = ["offen", "eingereicht", "policiert"]
 
 def parse_beitrag(text):
     """"50€" -> 50.0. Gibt None zurück, wenn kein Betrag erkennbar ist."""
+    if isinstance(text, (int, float)):
+        return None if text != text else float(text)  # text != text erkennt NaN
     if not isinstance(text, str) or not text.strip():
         return None
     match = re.search(r"[\d.,]+", text.replace(".", "").replace(",", "."))
@@ -50,6 +52,8 @@ def parse_beitrag(text):
 def parse_laufzeit_jahre(text):
     """Versucht eine Jahreszahl aus der Laufzeit-Spalte zu lesen.
     Gibt (jahre, ist_unklar) zurück. jahre ist None, wenn nicht eindeutig."""
+    if isinstance(text, (int, float)):
+        return (None, True) if text != text else (int(text), False)  # text != text erkennt NaN
     if not isinstance(text, str) or not text.strip():
         return None, True
     t = text.strip().lower()
