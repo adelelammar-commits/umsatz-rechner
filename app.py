@@ -38,7 +38,7 @@ ADELE_QUOTE = 0.80  # Adeles Stufe 5
 TEAM_QUOTEN = {
     "adel": ADELE_QUOTE,       # Eigengeschäft
     "emirhan": 0.80,           # gleiche Stufe wie Adele -> 0 Differenz
-    "seher": 0.675,
+    "seher": 0.55,             # Stufe 3
     "büsra": 0.37,             # Stufe 2
     "busra": 0.37,             # ohne Umlaut, falls so geschrieben
     "birtan": 0.55,
@@ -52,7 +52,7 @@ ADELE_ANTEIL_OVERRIDE = {
     "mahdi": 0.125,   # geteiltes Overhead mit einer weiteren Person -> nur halbe Differenz (12,5% statt 25%)
     "büsra": 0.215,   # geteiltes Overhead -> nur halbe Differenz (80%-37%=43% -> 21,5% statt 43%)
     "busra": 0.215,   # ohne Umlaut, falls so geschrieben
-    # Seher braucht keinen Override: 80% - 67,5% = 12,5% ergibt sich schon aus der normalen Formel.
+    "seher": 0.125,   # Stufe 3 (80%-55%=25%), geteiltes Overhead -> halbe Differenz (12,5%)
 }
 
 def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat=""):
