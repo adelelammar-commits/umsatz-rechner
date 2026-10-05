@@ -60,6 +60,9 @@ PRODUKT_ZU_SPARTE = {
     "kfz": ("PKW", ()),
     "zz": ("KV-Zusatz", ("zahn",)),
 }
+# Bei diesen (Sparte, Gesellschaft) wird bei mehreren Tarifen bewusst immer der niedrigste Satz genommen,
+# ohne Hinweis (Vorgabe Adele 2026-10-05: Hannoversche BU immer der niedrige Tarif).
+NIEDRIGSTER_TARIF = {("BU", "Hannoversche")}
 KV_SPARTEN = {"PKV", "KV-Zusatz", "GKV", "bKV"}
 
 _STOPWOERTER = {
@@ -136,7 +139,7 @@ def satz_fuer(tabelle, sparte, gesellschaft, bevorzugt=()):
         kandidaten = ohne if len(ohne) else zeilen
         satz = kandidaten["eur_je_wp"].fillna(kandidaten["verguetung_prozent"]).fillna(kandidaten["bp_prozent"])
         wahl = kandidaten.loc[satz.idxmin()]
-        hinweis = f"Tarif nicht eindeutig – niedrigster Satz verwendet ({wahl['tarif'] or 'Standard'}); Tarif bitte klären"
+        hinweis = None if (sparte, name) in NIEDRIGSTER_TARIF else f"Tarif nicht eindeutig – niedrigster Satz verwendet ({wahl['tarif'] or 'Standard'}); Tarif bitte klären"
     prozent = wahl["verguetung_prozent"] if pd.notna(wahl["verguetung_prozent"]) else wahl["bp_prozent"]
     return {
         "eur_je_wp": None if pd.isna(wahl["eur_je_wp"]) else float(wahl["eur_je_wp"]),
