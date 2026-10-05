@@ -105,13 +105,24 @@ with st.expander("Stattdessen CSV-Datei manuell hochladen"):
     if uploaded is not None:
         df = pd.read_csv(uploaded)
 
+
+
+def erste_spalte(row, *namen):
+    """Wert der ersten vorhandenen, nicht leeren Spalte -- die Tabellen nennen dieselbe Spalte
+    teils unterschiedlich (z.B. "Kunde" statt "Name Kunde", "Geschäftspartner" statt "Vertriebspartner")."""
+    for name in namen:
+        if name in row.index and pd.notna(row[name]):
+            return row[name]
+    return ""
+
+
 if df is not None:
     df.columns = [c.strip() for c in df.columns]
 
     alle_zeilen = []
     for _, row in df.iterrows():
-        name_kunde = str(row.get("Name Kunde", ""))
-        partner = str(row.get("Vertriebspartner", "")).strip()
+        name_kunde = str(erste_spalte(row, "Name Kunde", "Kunde"))
+        partner = str(erste_spalte(row, "Geschäftspartner", "Geschaeftspartner", "Vertriebspartner")).strip()
         partner_key = partner.lower()
         monat = str(row.get("Monat", "")).strip()
         produkt = str(row.get("Produkt", row.get("Produkt ", "")))
