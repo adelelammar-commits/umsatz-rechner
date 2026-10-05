@@ -5,6 +5,7 @@ Reine Rechenlogik ohne Streamlit-Code, damit beide Apps sie unverändert importi
 können, ohne dass beim Import bereits eine Seite gerendert wird.
 """
 
+import difflib
 import re
 
 import courtage
@@ -126,7 +127,9 @@ def stand_status(text):
     t = text.strip().lower()
     if t in STAND_STUFEN:
         return t
-    return "unklar"
+    # kleine Tippfehler wie "eingreicht" tolerieren, alles andere bleibt "unklar"
+    treffer = difflib.get_close_matches(t, STAND_STUFEN, n=1, cutoff=0.8)
+    return treffer[0] if treffer else "unklar"
 
 
 def berechne_positionen(

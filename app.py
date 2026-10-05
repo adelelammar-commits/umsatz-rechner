@@ -57,7 +57,7 @@ ADELE_ANTEIL_OVERRIDE = {
 }
 
 def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat="", gesellschaft="", courtage_tabelle=None):
-    partner_key = vertriebspartner.strip().lower()
+    partner_key = vertriebspartner.strip().lower().replace("ş", "s")
 
     if partner_key not in TEAM_QUOTEN:
         return [{
@@ -159,6 +159,9 @@ with st.expander("Stattdessen CSV-Datei manuell hochladen"):
 
 if df is not None:
     df.columns = [c.strip() for c in df.columns]
+    schluessel = [c for c in ("Name Kunde", "Vertriebspartner", "Produkt") if c in df.columns]
+    if schluessel:
+        df = df.dropna(subset=schluessel, how="all")
 
     alle_zeilen = []
     for _, row in df.iterrows():

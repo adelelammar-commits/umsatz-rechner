@@ -134,6 +134,9 @@ def erste_spalte(row, *namen):
 
 if df is not None:
     df.columns = [c.strip() for c in df.columns]
+    schluessel = [c for c in ("Name Kunde", "Kunde", "Produkt") if c in df.columns]
+    if schluessel:
+        df = df.dropna(subset=schluessel, how="all")
 
     alle_zeilen = []
     for _, row in df.iterrows():
