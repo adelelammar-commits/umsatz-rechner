@@ -7,6 +7,8 @@ können, ohne dass beim Import bereits eine Seite gerendert wird.
 
 import re
 
+import courtage
+
 # --- Fachliche Konstanten (K&W Wohlstandspunkte-System) ---
 # Quelle: Canva-Kickoff-Präsentation "K&W - Kick Off 27.06.2026" + Angaben von Adele.
 # Update 2026-09-08: Provisionssatz und Gesamtumsatz-Abzug angepasst, gilt für alle Stufen/Partner.
@@ -24,7 +26,8 @@ KV_NETTO_ABZUG = 50.0       # vom Bruttobeitrag abgezogen, um den (vereinfachten
 KV_MONATSBEITRAEGE_100 = 9.0  # Monatsbeiträge Provision bei 100% Quote
 
 LEBEN_PRODUKTE = {"bu", "pav", "bav", "rürup", "ruerup", "kidspolice"}
-SACH_PRODUKTE = {"sach", "gewerbe sach", "wohngebäude", "wohngebaeude"}
+# "zz" (Zahnzusatz) seit 2026-09-30: gleiche Formel wie Sach (WP = Beitrag / 6).
+SACH_PRODUKTE = {"sach", "gewerbe sach", "wohngebäude", "wohngebaeude", "zz"}
 KRANKEN_PRODUKTE = {"pkv"}
 AUSGESCHLOSSEN_PRODUKTE = {"depot"}  # wird aktuell nicht verkauft/berechnet
 
@@ -45,6 +48,18 @@ def parse_beitrag(text):
         return None
     try:
         return float(match.group())
+    except ValueError:
+        return None
+
+
+def parse_zahl(wert):
+    """"22,2" / 22.2 / "144" -> float; None bei leer/ungültig."""
+    if isinstance(wert, (int, float)):
+        return None if wert != wert else float(wert)
+    if not isinstance(wert, str) or not wert.strip():
+        return None
+    try:
+        return float(wert.strip().replace(".", "").replace(",", ".") if "," in wert else wert.strip())
     except ValueError:
         return None
 
@@ -114,18 +129,32 @@ def stand_status(text):
     return "unklar"
 
 
-def berechne_positionen(name_kunde, quote, produkt, beitrag_text, laufzeit_text, stand_text, monat=""):
+def berechne_positionen(
+    name_kunde, quote, produkt, beitrag_text, laufzeit_text, stand_text, monat="",
+    gesellschaft="", courtage_tabelle=None, wp_vorgabe=None,
+):
     """Berechnet WP/Auszahlung für alle Positionen einer Zeile (ggf. mehrere bei Kombi-
     Produkten wie "PAV + Depot"), mit der übergebenen persönlichen `quote` (0.0-1.0) als
     Vergütungssatz. `quote` ist entweder die volle eigene Quote (persönliche Ansicht) oder
     eine Differenz-Quote (Adeles Anteil an Teamgeschäft) -- die Formel selbst ist identisch.
+
+    Mit `courtage_tabelle` (courtage.lade_tabelle) und eingetragener `gesellschaft` kommt der
+    Satz aus der Courtageliste (Stufe-5-Satz / 0,80 = Satz bei 100 % Quote, dann mal `quote`);
+    sonst gilt der bisherige Standardsatz. `wp_vorgabe` sind in der Tabelle eingetragene WP
+    (enthalten die Bewertungsfaktoren der Gesellschaft) und ersetzen bei Leben-Sparten die
+    selbst gerechneten WP.
     """
     stand = stand_status(stand_text)
+    ges = str(gesellschaft or "").strip()
+    if ges.lower() == "nan":
+        ges = ""
     ergebnisse = []
 
     for teilprodukt, teilbeitrag_text in split_produkt_beitrag(produkt, beitrag_text):
         kategorie = produkt_kategorie(teilprodukt)
         beitrag = parse_beitrag(teilbeitrag_text)
+        sparte, bevorzugt = courtage.sparte_fuer(teilprodukt)
+        nutze_courtage = courtage_tabelle is not None and bool(ges) and sparte is not None
 
         zeile = {
             "Name Kunde": name_kunde,
@@ -135,6 +164,7 @@ def berechne_positionen(name_kunde, quote, produkt, beitrag_text, laufzeit_text,
             "Status": stand,
             "WP": None,
             "Auszahlung (€)": None,
+            "Quelle": "",
             "Hinweis": "",
         }
 
@@ -142,8 +172,12 @@ def berechne_positionen(name_kunde, quote, produkt, beitrag_text, laufzeit_text,
             zeile["Hinweis"] = "Depot – wird aktuell nicht berechnet"
             ergebnisse.append(zeile)
             continue
-        if kategorie == "unbekannt":
-            zeile["Hinweis"] = "Unbekanntes Produkt – bitte Formel klären"
+        if kategorie == "unbekannt" and not nutze_courtage:
+            zeile["Hinweis"] = (
+                "Gesellschaft fehlt – bitte in der Spalte Gesellschaft eintragen"
+                if sparte is not None and courtage_tabelle is not None
+                else "Unbekanntes Produkt – bitte Formel klären"
+            )
             ergebnisse.append(zeile)
             continue
         if stand == "unklar":
@@ -156,8 +190,46 @@ def berechne_positionen(name_kunde, quote, produkt, beitrag_text, laufzeit_text,
             continue
 
         multiplikator, _ = produkt_multiplikator_und_name(teilprodukt)
+        abzuege = GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
 
-        if kategorie == "leben":
+        if nutze_courtage:
+            satz = courtage.satz_fuer(courtage_tabelle, sparte, ges, bevorzugt)
+            if satz.get("fehler"):
+                zeile["Hinweis"] = satz["fehler"]
+                ergebnisse.append(zeile)
+                continue
+            if satz["eur_je_wp"] is not None:
+                satz_100 = satz["eur_je_wp"] / courtage.STUFEN_QUOTE[5]
+                if sparte in courtage.KV_SPARTEN:
+                    # PKV: Provision auf den (vereinfachten) Nettobeitrag, WP bleiben Brutto / 6.
+                    basis = beitrag - KV_NETTO_ABZUG if sparte == "PKV" else beitrag
+                    if basis <= 0:
+                        zeile["Hinweis"] = "Bruttobeitrag zu niedrig für Netto-Abzug (50€) – bitte prüfen"
+                        ergebnisse.append(zeile)
+                        continue
+                    wp_verguetung = basis / 6 * multiplikator
+                    wp = wp_vorgabe if wp_vorgabe is not None else beitrag / 6 * multiplikator
+                else:
+                    if wp_vorgabe is not None:
+                        wp = wp_verguetung = wp_vorgabe
+                    else:
+                        jahre, unklar = parse_laufzeit_jahre(laufzeit_text)
+                        if unklar:
+                            zeile["Hinweis"] = "Laufzeit fehlt/unklar – bitte manuell nachtragen"
+                            ergebnisse.append(zeile)
+                            continue
+                        if satz["bz_dauer_jahre"]:
+                            jahre = min(jahre, satz["bz_dauer_jahre"])
+                        wp = wp_verguetung = beitrag * 12 * jahre / 1000 * multiplikator
+                auszahlung = wp_verguetung * satz_100 * quote * abzuege
+            else:
+                wp = wp_vorgabe if wp_vorgabe is not None else beitrag / 6 * multiplikator
+                auszahlung = beitrag * multiplikator * (satz["prozent"] / 100 / courtage.STUFEN_QUOTE[5]) * quote * abzuege
+            tarif = f" ({satz['tarif'][:30]})" if satz["tarif"] else ""
+            zeile["Quelle"] = f"Courtage: {satz['gesellschaft']}{tarif}"
+            if satz["hinweis"]:
+                zeile["Hinweis"] = satz["hinweis"]
+        elif kategorie == "leben":
             jahre, unklar = parse_laufzeit_jahre(laufzeit_text)
             if unklar:
                 zeile["Hinweis"] = "Laufzeit fehlt/unklar – bitte manuell nachtragen"
@@ -165,23 +237,22 @@ def berechne_positionen(name_kunde, quote, produkt, beitrag_text, laufzeit_text,
                 continue
             bws = beitrag * 12 * jahre
             wp = (bws / 1000) * multiplikator
-            auszahlung = wp * VOLLWERT_PRO_WP * quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
+            auszahlung = wp * VOLLWERT_PRO_WP * quote * abzuege
+            zeile["Quelle"] = "Standardsatz"
         elif kategorie == "kranken":
-            # Eigene Formel seit 2026-09-08: nicht über WP/VOLLWERT_PRO_WP, sondern direkt
-            # in Monatsbeiträgen auf den (vereinfachten) Nettobeitrag gerechnet.
-            wp = (beitrag / 6) * multiplikator  # nur für Karrierestufen-Statistik, kein Einfluss auf Auszahlung
+            # Standardformel seit 2026-09-08: direkt in Monatsbeiträgen auf den (vereinfachten) Nettobeitrag.
+            wp = (beitrag / 6) * multiplikator  # nur für Karrierestufen-Statistik
             nettobeitrag = beitrag - KV_NETTO_ABZUG
             if nettobeitrag <= 0:
                 zeile["Hinweis"] = "Bruttobeitrag zu niedrig für Netto-Abzug (50€) – bitte prüfen"
                 ergebnisse.append(zeile)
                 continue
-            auszahlung = (
-                KV_MONATSBEITRAEGE_100 * quote * nettobeitrag * multiplikator
-                * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
-            )
+            auszahlung = KV_MONATSBEITRAEGE_100 * quote * nettobeitrag * multiplikator * abzuege
+            zeile["Quelle"] = "Standardsatz"
         else:  # sach
             wp = (beitrag / 6) * multiplikator
-            auszahlung = wp * VOLLWERT_PRO_WP * quote * GESAMTUMSATZ_ABZUG * STORNORESERVE_ABZUG
+            auszahlung = wp * VOLLWERT_PRO_WP * quote * abzuege
+            zeile["Quelle"] = "Standardsatz"
 
         zeile["Beitrag (€)"] = round(beitrag * multiplikator, 2)
         zeile["WP"] = round(wp, 2)

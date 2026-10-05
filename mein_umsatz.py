@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import courtage
 import formeln
 
 st.set_page_config(page_title="Mein Umsatz", page_icon="logo.png", layout="wide")
@@ -40,6 +41,21 @@ MITARBEITER_NAME = st.secrets.get("MITARBEITER_NAME", "Mein")
 MITARBEITER_QUOTE = float(st.secrets.get("MITARBEITER_QUOTE", 0))
 # Unterstellte Partner: Name -> Overhead-Satz (Quotendifferenz), aus der Secrets-Tabelle [UNTERSTELLTE].
 UNTERSTELLTE = {str(n).strip().lower(): float(q) for n, q in dict(st.secrets.get("UNTERSTELLTE", {})).items()}
+
+COURTAGE_KEY = st.secrets.get("COURTAGE_KEY", "")
+
+
+@st.cache_resource
+def lade_courtage(key):
+    return courtage.lade_tabelle(key)
+
+
+COURTAGE = None
+if COURTAGE_KEY:
+    try:
+        COURTAGE = lade_courtage(COURTAGE_KEY)
+    except Exception as e:
+        st.warning(f"Courtageliste konnte nicht geladen werden, es gilt der Standardsatz: {e}")
 
 LOGO_BASE64 = base64.b64encode(Path("logo.png").read_bytes()).decode()
 
@@ -133,13 +149,16 @@ if df is not None:
         else:
             alle_zeilen.append({
                 "Name Kunde": name_kunde, "Produkt": produkt, "Monat": monat, "Beitrag (€)": None,
-                "Status": "unklar", "WP": None, "Auszahlung (€)": None, "Art": partner,
+                "Status": "unklar", "WP": None, "Auszahlung (€)": None, "Art": partner, "Quelle": "",
                 "Hinweis": f"Vertriebspartner „{partner}“ ist nicht als Unterstellter hinterlegt",
             })
             continue
         zeilen = formeln.berechne_positionen(
             name_kunde, quote, produkt,
             row.get("Beitrag"), row.get("Laufzeit"), row.get("Stand"), monat,
+            gesellschaft=erste_spalte(row, "Gesellschaften", "Gesellschaft"),
+            courtage_tabelle=COURTAGE,
+            wp_vorgabe=formeln.parse_zahl(erste_spalte(row, "WPs", "Wps", "WP")),
         )
         for zeile in zeilen:
             zeile["Art"] = art
@@ -169,7 +188,7 @@ if df is not None:
     }
     ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
 
-    spalten_reihenfolge = ["Name Kunde", "Art", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    spalten_reihenfolge = ["Name Kunde", "Art", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Quelle", "Status", "Hinweis"]
     ergebnis_df = ergebnis_df[spalten_reihenfolge]
 
     st.metric("💰 Gesamt-Vergütung (offen + eingereicht + policiert)", f"{gesamt:,.2f} €")

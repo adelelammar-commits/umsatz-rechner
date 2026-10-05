@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import courtage
 import formeln
 
 st.set_page_config(page_title="K&W Umsatz Rechner", page_icon="logo.png", layout="wide")
@@ -55,14 +56,14 @@ ADELE_ANTEIL_OVERRIDE = {
     "seher": 0.125,   # Stufe 3 (80%-55%=25%), geteiltes Overhead -> halbe Differenz (12,5%)
 }
 
-def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat=""):
+def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat="", gesellschaft="", courtage_tabelle=None):
     partner_key = vertriebspartner.strip().lower()
 
     if partner_key not in TEAM_QUOTEN:
         return [{
             "Name Kunde": name_kunde, "Vertriebspartner": vertriebspartner, "Produkt": produkt,
             "Monat": monat, "Beitrag (€)": None, "Status": "nicht im Team", "WP": None, "Auszahlung (€)": None,
-            "Hinweis": "Zählt nicht (kein Teammitglied)",
+            "Quelle": "", "Hinweis": "Zählt nicht (kein Teammitglied)",
         }]
 
     if partner_key in ADELE_ANTEIL_OVERRIDE:
@@ -72,11 +73,29 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
     else:
         quote = ADELE_QUOTE - TEAM_QUOTEN[partner_key]
 
-    zeilen = formeln.berechne_positionen(name_kunde, quote, produkt, beitrag_text, laufzeit_text, stand_text, monat)
+    zeilen = formeln.berechne_positionen(
+        name_kunde, quote, produkt, beitrag_text, laufzeit_text, stand_text, monat,
+        gesellschaft=gesellschaft, courtage_tabelle=courtage_tabelle,
+    )
     for zeile in zeilen:
         zeile["Vertriebspartner"] = vertriebspartner
     return zeilen
 
+
+COURTAGE_KEY = st.secrets.get("COURTAGE_KEY", "")
+
+
+@st.cache_resource
+def lade_courtage(key):
+    return courtage.lade_tabelle(key)
+
+
+COURTAGE = None
+if COURTAGE_KEY:
+    try:
+        COURTAGE = lade_courtage(COURTAGE_KEY)
+    except Exception as e:
+        st.warning(f"Courtageliste konnte nicht geladen werden, es gilt der Standardsatz: {e}")
 
 LOGO_BASE64 = base64.b64encode(Path("logo.png").read_bytes()).decode()
 
@@ -151,6 +170,8 @@ if df is not None:
             row.get("Laufzeit"),
             row.get("Stand"),
             str(row.get("Monat", "")).strip(),
+            gesellschaft="" if pd.isna(row.get("Gesellschaften", row.get("Gesellschaft", ""))) else str(row.get("Gesellschaften", row.get("Gesellschaft", ""))),
+            courtage_tabelle=COURTAGE,
         ))
 
     ergebnis_df = pd.DataFrame(alle_zeilen)
@@ -178,7 +199,7 @@ if df is not None:
     }
     ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
 
-    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    spalten_reihenfolge = ["Name Kunde", "Vertriebspartner", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Quelle", "Status", "Hinweis"]
     ergebnis_df = ergebnis_df[spalten_reihenfolge]
 
     st.metric("💰 Gesamt-Vergütung (offen + eingereicht + policiert)", f"{gesamt:,.2f} €")
