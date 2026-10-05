@@ -38,6 +38,8 @@ if not check_password():
 # niemand die Zahlen einer anderen Person sehen kann.
 MITARBEITER_NAME = st.secrets.get("MITARBEITER_NAME", "Mein")
 MITARBEITER_QUOTE = float(st.secrets.get("MITARBEITER_QUOTE", 0))
+# Unterstellte Partner: Name -> Overhead-Satz (Quotendifferenz), aus der Secrets-Tabelle [UNTERSTELLTE].
+UNTERSTELLTE = {str(n).strip().lower(): float(q) for n, q in dict(st.secrets.get("UNTERSTELLTE", {})).items()}
 
 LOGO_BASE64 = base64.b64encode(Path("logo.png").read_bytes()).decode()
 
@@ -108,15 +110,29 @@ if df is not None:
 
     alle_zeilen = []
     for _, row in df.iterrows():
-        alle_zeilen.extend(formeln.berechne_positionen(
-            str(row.get("Name Kunde", "")),
-            MITARBEITER_QUOTE,
-            str(row.get("Produkt", row.get("Produkt ", ""))),
-            row.get("Beitrag"),
-            row.get("Laufzeit"),
-            row.get("Stand"),
-            str(row.get("Monat", "")).strip(),
-        ))
+        name_kunde = str(row.get("Name Kunde", ""))
+        partner = str(row.get("Vertriebspartner", "")).strip()
+        partner_key = partner.lower()
+        monat = str(row.get("Monat", "")).strip()
+        produkt = str(row.get("Produkt", row.get("Produkt ", "")))
+        if partner_key in ("", "nan", MITARBEITER_NAME.lower()):
+            quote, art = MITARBEITER_QUOTE, "Eigenes Geschäft"
+        elif partner_key in UNTERSTELLTE:
+            quote, art = UNTERSTELLTE[partner_key], f"Overhead ({partner})"
+        else:
+            alle_zeilen.append({
+                "Name Kunde": name_kunde, "Produkt": produkt, "Monat": monat, "Beitrag (€)": None,
+                "Status": "unklar", "WP": None, "Auszahlung (€)": None, "Art": partner,
+                "Hinweis": f"Vertriebspartner „{partner}“ ist nicht als Unterstellter hinterlegt",
+            })
+            continue
+        zeilen = formeln.berechne_positionen(
+            name_kunde, quote, produkt,
+            row.get("Beitrag"), row.get("Laufzeit"), row.get("Stand"), monat,
+        )
+        for zeile in zeilen:
+            zeile["Art"] = art
+        alle_zeilen.extend(zeilen)
 
     ergebnis_df = pd.DataFrame(alle_zeilen)
     ergebnis_df = ergebnis_df.sort_values(["Name Kunde"]).reset_index(drop=True)
@@ -142,10 +158,16 @@ if df is not None:
     }
     ergebnis_df["Status"] = ergebnis_df["Status"].map(STATUS_LABEL).fillna(ergebnis_df["Status"])
 
-    spalten_reihenfolge = ["Name Kunde", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
+    spalten_reihenfolge = ["Name Kunde", "Art", "Monat", "Produkt", "Beitrag (€)", "WP", "Auszahlung (€)", "Status", "Hinweis"]
     ergebnis_df = ergebnis_df[spalten_reihenfolge]
 
     st.metric("💰 Gesamt-Vergütung (offen + eingereicht + policiert)", f"{gesamt:,.2f} €")
+
+    if UNTERSTELLTE:
+        eigen = berechnet[berechnet["Art"] == "Eigenes Geschäft"]["Auszahlung (€)"].sum()
+        col_a, col_b = st.columns(2)
+        col_a.metric("👤 Eigenes Geschäft", f"{eigen:,.2f} €")
+        col_b.metric("👥 Overhead aus Unterstellten", f"{gesamt - eigen:,.2f} €")
 
     col1, col2, col3 = st.columns(3)
     col1.metric("✅ Sichere Auszahlung (policiert)", f"{sicher:,.2f} €")
