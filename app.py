@@ -165,7 +165,7 @@ if df is not None:
 
     alle_zeilen = []
     for _, row in df.iterrows():
-        alle_zeilen.extend(berechne_zeile(
+        zeilen = berechne_zeile(
             str(row.get("Name Kunde", "")),
             str(row.get("Vertriebspartner", "")),
             str(row.get("Produkt", row.get("Produkt ", ""))),
@@ -175,7 +175,11 @@ if df is not None:
             str(row.get("Monat", "")).strip(),
             gesellschaft="" if pd.isna(row.get("Gesellschaften", row.get("Gesellschaft", ""))) else str(row.get("Gesellschaften", row.get("Gesellschaft", ""))),
             courtage_tabelle=COURTAGE,
-        ))
+        )
+        ausgezahlt = str(row.get("Ausgezahlt", "")).strip().lower() in ("true", "wahr", "ja", "x", "1")
+        for zeile in zeilen:
+            zeile["Ausgezahlt"] = ausgezahlt
+        alle_zeilen.extend(zeilen)
 
     ergebnis_df = pd.DataFrame(alle_zeilen)
     ergebnis_df = ergebnis_df.sort_values(["Vertriebspartner", "Name Kunde"]).reset_index(drop=True)
@@ -215,6 +219,52 @@ if df is not None:
     col4, col5 = st.columns(2)
     col4.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
     col5.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
+
+    st.divider()
+    st.subheader("💸 Auszahlungs-Checkliste")
+    st.caption(
+        "Abgeschlossenes (policiertes) Geschäft. Abgehakt wird direkt in deiner Google-Tabelle in der Spalte "
+        "„Ausgezahlt“, die App liest es alle 60 Sekunden neu. Folgt dem Monatsfilter oben."
+    )
+    pol = berechnet[berechnet["Status"] == "policiert"].copy()
+    pol["Ausgezahlt"] = pol["Ausgezahlt"].fillna(False).astype(bool)
+    pol["Vertriebspartner"] = pol["Vertriebspartner"].str.strip()
+    noch_offen = pol[~pol["Ausgezahlt"]]["Auszahlung (€)"].sum()
+    schon_bezahlt = pol[pol["Ausgezahlt"]]["Auszahlung (€)"].sum()
+    pipeline = ausstehend + offen_summe
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("⏳ Policiert, noch nicht ausgezahlt", f"{noch_offen:,.2f} €")
+    k2.metric("💶 Bereits ausgezahlt", f"{schon_bezahlt:,.2f} €")
+    k3.metric("🟡 Noch in der Pipeline (eingereicht + offen)", f"{pipeline:,.2f} €")
+    k4.metric("📥 Insgesamt noch zu erwarten", f"{noch_offen + pipeline:,.2f} €")
+
+    ansicht = st.radio("Anzeigen", ["Noch nicht ausgezahlt", "Bereits ausgezahlt", "Alle"], horizontal=True)
+    if ansicht == "Noch nicht ausgezahlt":
+        pol = pol[~pol["Ausgezahlt"]]
+    elif ansicht == "Bereits ausgezahlt":
+        pol = pol[pol["Ausgezahlt"]]
+    pol = pol.sort_values(["Ausgezahlt", "Vertriebspartner", "Monat", "Name Kunde"])
+    st.dataframe(
+        pol[["Ausgezahlt", "Name Kunde", "Vertriebspartner", "Monat", "Produkt", "Auszahlung (€)", "Quelle"]],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Ausgezahlt": st.column_config.CheckboxColumn("Ausgezahlt"),
+            "Auszahlung (€)": st.column_config.NumberColumn("Auszahlung (€)", format="%.2f €"),
+        },
+    )
+    if not pol.empty:
+        je_partner = (
+            pol.groupby("Vertriebspartner", as_index=False)
+            .agg(**{"Verträge": ("Name Kunde", "count"), "Summe (€)": ("Auszahlung (€)", "sum")})
+            .sort_values("Summe (€)", ascending=False)
+        )
+        st.caption(f"Summe pro Vertriebspartner ({ansicht.lower()})")
+        st.dataframe(
+            je_partner, use_container_width=True, hide_index=True,
+            column_config={"Summe (€)": st.column_config.NumberColumn("Summe (€)", format="%.2f €")},
+        )
 
     spalten_config = {
         "Beitrag (€)": st.column_config.NumberColumn("Beitrag (€)", format="%.2f €"),
