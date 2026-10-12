@@ -309,5 +309,51 @@ if df is not None:
         file_name=f"monatsuebersicht_{monat_name}.csv",
         mime="text/csv",
     )
+
+    st.divider()
+    st.subheader("📊 Stand nach Status (WP und Vergütung)")
+    st.caption("Alles zusammen und aufgeteilt in policiert, eingereicht und offen. Folgt dem Monatsfilter oben.")
+
+    def status_summe(maske):
+        teil = berechnet[maske]
+        return {"Verträge": len(teil), "WP": teil["WP"].sum(), "Vergütung (€)": teil["Auszahlung (€)"].sum()}
+
+    st_ = berechnet["Status"]
+    status_tabelle = pd.DataFrame(
+        [
+            {"Stand": "✅ Policiert", **status_summe(st_ == "policiert")},
+            {"Stand": "🟡 Eingereicht", **status_summe(st_ == "eingereicht")},
+            {"Stand": "➕ Policiert + eingereicht (ohne Offene)", **status_summe(st_.isin(["policiert", "eingereicht"]))},
+            {"Stand": "🔵 Offen", **status_summe(st_ == "offen")},
+            {"Stand": "🧮 Alles zusammen", **status_summe(st_.notna())},
+        ]
+    )
+    st.dataframe(
+        status_tabelle,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "WP": st.column_config.NumberColumn("WP", format="%.2f"),
+            "Vergütung (€)": st.column_config.NumberColumn("Vergütung (€)", format="%.2f €"),
+        },
+    )
+
+    je_partner_status = (
+        berechnet.assign(Vertriebspartner=berechnet["Vertriebspartner"].str.strip())
+        .pivot_table(index="Vertriebspartner", columns="Status", values=["WP", "Auszahlung (€)"], aggfunc="sum", fill_value=0)
+    )
+    zeilen_pp = []
+    for partner, r in je_partner_status.iterrows():
+        z = {"Vertriebspartner": partner}
+        for status, label in (("policiert", "policiert"), ("eingereicht", "eingereicht"), ("offen", "offen")):
+            z[f"WP {label}"] = r.get(("WP", status), 0)
+        for status, label in (("policiert", "policiert"), ("eingereicht", "eingereicht"), ("offen", "offen")):
+            z[f"€ {label}"] = r.get(("Auszahlung (€)", status), 0)
+        zeilen_pp.append(z)
+    if zeilen_pp:
+        st.caption("Aufgeteilt nach Vertriebspartner")
+        pp_config = {c: st.column_config.NumberColumn(c, format="%.2f") for c in zeilen_pp[0] if c.startswith("WP")}
+        pp_config.update({c: st.column_config.NumberColumn(c, format="%.2f €") for c in zeilen_pp[0] if c.startswith("€")})
+        st.dataframe(pd.DataFrame(zeilen_pp), use_container_width=True, hide_index=True, column_config=pp_config)
 else:
     st.info("Lade deine CSV-Datei hoch oder richte die Google-Tabellen-Anbindung ein, um loszulegen.")
