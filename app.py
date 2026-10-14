@@ -33,28 +33,10 @@ if not check_password():
     st.stop()
 
 # Fachliche Konstanten/Formeln liegen in formeln.py (gemeinsam mit mein_umsatz.py genutzt).
-ADELE_QUOTE = 0.80  # Adeles Stufe 5
-
-# Team: Name -> eigene Quote (für Differenz-Berechnung). Nur diese Personen zählen.
-TEAM_QUOTEN = {
-    "adel": ADELE_QUOTE,       # Eigengeschäft
-    "emirhan": 0.80,           # gleiche Stufe wie Adele -> 0 Differenz
-    "seher": 0.55,             # Stufe 3
-    "büsra": 0.37,             # Stufe 2
-    "busra": 0.37,             # ohne Umlaut, falls so geschrieben
-    "birtan": 0.55,
-    "ikram": 0.20,
-    "mahdi": 0.55,
-}
-
-# Sonderfälle, bei denen Adeles Anteil NICHT der normalen Differenz-Formel
-# (ADELE_QUOTE - eigene_quote) folgt, sondern direkt festgelegt ist.
-ADELE_ANTEIL_OVERRIDE = {
-    "mahdi": 0.125,   # geteiltes Overhead mit einer weiteren Person -> nur halbe Differenz (12,5% statt 25%)
-    "büsra": 0.215,   # geteiltes Overhead -> nur halbe Differenz (80%-37%=43% -> 21,5% statt 43%)
-    "busra": 0.215,   # ohne Umlaut, falls so geschrieben
-    "seher": 0.125,   # Stufe 3 (80%-55%=25%), geteiltes Overhead -> halbe Differenz (12,5%)
-}
+# Team und Quoten dieser Struktur stehen in team.py -- nur diese Datei muss man pro Struktur anpassen.
+from team import ANTEIL_OVERRIDE as ADELE_ANTEIL_OVERRIDE
+from team import LEITER_KEY, LEITER_QUOTE as ADELE_QUOTE
+from team import TEAM_QUOTEN
 
 def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat="", gesellschaft="", courtage_tabelle=None):
     partner_key = vertriebspartner.strip().lower().replace("ş", "s")
@@ -68,7 +50,7 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
 
     if partner_key in ADELE_ANTEIL_OVERRIDE:
         quote = ADELE_ANTEIL_OVERRIDE[partner_key]
-    elif partner_key == "adel":
+    elif partner_key == LEITER_KEY:
         quote = ADELE_QUOTE
     else:
         quote = ADELE_QUOTE - TEAM_QUOTEN[partner_key]
