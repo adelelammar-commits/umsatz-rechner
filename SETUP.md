@@ -27,7 +27,10 @@ Aufgaben:
 
 ## Die Google-Tabelle
 
-Erste Zeile, genau diese Spaltenüberschriften:
+**Vorlage mit einem Klick kopieren** (Dropdowns und Kästchen sind schon drin):
+https://docs.google.com/spreadsheets/d/13GoCV3-S5PkYXE3YiW5LU477GSclF5svf05-t8vHyIY/copy
+
+Oder selbst bauen: Erste Zeile, genau diese Spaltenüberschriften:
 
 | Name Kunde | Vertriebspartner | Gesellschaften | Produkt | Beitrag | Laufzeit | Stand | Monat | Ausgezahlt |
 |---|---|---|---|---|---|---|---|---|
