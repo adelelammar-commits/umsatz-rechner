@@ -41,6 +41,8 @@ Oder selbst bauen: Erste Zeile, genau diese Spaltenüberschriften:
 - **Beitrag**: Euro pro Monat, **Laufzeit**: Jahre (oder „volle Laufzeit“)
 - **Stand**: offen / eingereicht / policiert
 - **Monat**: z. B. Oktober
+- **Alte Regel** (optional, Spalte J): Kästchen. Nur nötig, wenn sich eure Vergütungsregel geändert hat und ältere Zeilen noch
+  nach `ANTEIL_OVERRIDE` in `team.py` laufen sollen. Mit Haken = Sonderanteil aus `team.py`, ohne Haken = volle Differenz. Fehlt die Spalte, gilt überall der Sonderanteil.
 - **Ausgezahlt**: Kästchen (Einfügen → Kästchen), wird abgehakt, wenn die Provision da ist
 
 Tabelle teilen: **Teilen → Jeder mit dem Link → Betrachter**. Als `SHEET_CSV_URL` dann

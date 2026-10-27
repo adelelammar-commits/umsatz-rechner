@@ -38,7 +38,7 @@ from team import ANTEIL_OVERRIDE as ADELE_ANTEIL_OVERRIDE
 from team import LEITER_KEY, LEITER_QUOTE as ADELE_QUOTE
 from team import TEAM_QUOTEN
 
-def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat="", gesellschaft="", courtage_tabelle=None):
+def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat="", gesellschaft="", courtage_tabelle=None, alte_regel=True):
     partner_key = vertriebspartner.strip().lower().replace("ş", "s")
 
     if partner_key not in TEAM_QUOTEN:
@@ -48,7 +48,9 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
             "Quelle": "", "Hinweis": "Zählt nicht (kein Teammitglied)",
         }]
 
-    if partner_key in ADELE_ANTEIL_OVERRIDE:
+    # Neue Regel (ab Oktober 2026): keine halbierten Anteile mehr, sondern die volle Differenz.
+    # Der alte Sonderanteil gilt nur noch für Zeilen mit Haken in der Spalte "Alte Regel".
+    if alte_regel and partner_key in ADELE_ANTEIL_OVERRIDE:
         quote = ADELE_ANTEIL_OVERRIDE[partner_key]
     elif partner_key == LEITER_KEY:
         quote = ADELE_QUOTE
@@ -145,8 +147,15 @@ if df is not None:
     if schluessel:
         df = df.dropna(subset=schluessel, how="all")
 
+    # Fehlt die Spalte "Alte Regel" ganz, gilt überall der bisherige Anteil (wie bisher).
+    hat_regelspalte = "Alte Regel" in df.columns
+
     alle_zeilen = []
     for _, row in df.iterrows():
+        alte_regel = (
+            str(row.get("Alte Regel", "")).strip().lower() in ("true", "wahr", "ja", "x", "1")
+            if hat_regelspalte else True
+        )
         zeilen = berechne_zeile(
             str(row.get("Name Kunde", "")),
             str(row.get("Vertriebspartner", "")),
@@ -157,6 +166,7 @@ if df is not None:
             str(row.get("Monat", "")).strip(),
             gesellschaft="" if pd.isna(row.get("Gesellschaften", row.get("Gesellschaft", ""))) else str(row.get("Gesellschaften", row.get("Gesellschaft", ""))),
             courtage_tabelle=COURTAGE,
+            alte_regel=alte_regel,
         )
         ausgezahlt = str(row.get("Ausgezahlt", "")).strip().lower() in ("true", "wahr", "ja", "x", "1")
         for zeile in zeilen:
