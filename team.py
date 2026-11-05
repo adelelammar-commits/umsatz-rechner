@@ -13,7 +13,7 @@ LEITER_QUOTE = 0.80
 # Dein Anteil an fremdem Geschäft = deine Quote minus deren Quote (Differenz).
 TEAM_QUOTEN = {
     "adel": 0.80,       # Eigengeschäft
-    "emirhan": 0.80,    # gleiche Stufe wie Adele -> 0 Differenz
+    "emirhan": 0.55,    # vorübergehend 55 % (Stand 2026-11-05), Adels Anteil fest 10 % -> FEST_ANTEIL
     "seher": 0.55,      # Stufe 3
     "büsra": 0.37,      # Stufe 2
     "busra": 0.37,      # ohne Umlaut, falls so geschrieben
@@ -29,4 +29,11 @@ ANTEIL_OVERRIDE = {
     "büsra": 0.215,   # geteiltes Overhead -> halbe Differenz (21,5% statt 43%)
     "busra": 0.215,
     "seher": 0.125,
+    "emirhan": 0.0,   # bis Oktober 2026 gleiche Stufe wie Adel -> 0 Differenz (Zeilen mit "Alte Regel")
+}
+
+# Feste Anteile für alle Zeilen OHNE Haken bei "Alte Regel" (statt der Differenz).
+# Für Absprachen, bei denen dein Anteil bewusst nicht die Differenz ist. Leer lassen, wenn es keine gibt.
+FEST_ANTEIL = {
+    "emirhan": 0.10,  # Emirhan vorübergehend auf 55 %, Adels Differenz fest 10 % (Stand 2026-11-05)
 }

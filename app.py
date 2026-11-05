@@ -37,6 +37,26 @@ if not check_password():
 from team import ANTEIL_OVERRIDE as ADELE_ANTEIL_OVERRIDE
 from team import LEITER_KEY, LEITER_QUOTE as ADELE_QUOTE
 from team import TEAM_QUOTEN
+try:
+    from team import FEST_ANTEIL
+except ImportError:  # ältere team.py ohne diese Einstellung
+    FEST_ANTEIL = {}
+
+# Eigene App für einen anderen Leiter (z.B. Emirhan) aus DEMSELBEN Code: stehen in den Streamlit-Secrets
+# LEITER_KEY, LEITER_QUOTE und eine Tabelle [TEAM_QUOTEN], ersetzen sie die Einstellungen aus team.py.
+# Optional dazu [ANTEIL_OVERRIDE] und [FEST_ANTEIL]. Die Tabellen müssen in den Secrets ganz unten stehen.
+if "TEAM_QUOTEN" in st.secrets:
+    def _quoten(name):
+        return {str(k).strip().lower(): float(v) for k, v in dict(st.secrets.get(name, {})).items()}
+
+    LEITER_KEY = str(st.secrets["LEITER_KEY"]).strip().lower()
+    ADELE_QUOTE = float(st.secrets["LEITER_QUOTE"])
+    TEAM_QUOTEN = _quoten("TEAM_QUOTEN")
+    TEAM_QUOTEN.setdefault(LEITER_KEY, ADELE_QUOTE)
+    ADELE_ANTEIL_OVERRIDE = _quoten("ANTEIL_OVERRIDE")
+    FEST_ANTEIL = _quoten("FEST_ANTEIL")
+
+APP_TITEL = st.secrets.get("APP_TITEL", "Umsatz Rechner")
 
 def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit_text, stand_text, monat="", gesellschaft="", courtage_tabelle=None, alte_regel=True):
     partner_key = vertriebspartner.strip().lower().replace("ş", "s")
@@ -50,8 +70,11 @@ def berechne_zeile(name_kunde, vertriebspartner, produkt, beitrag_text, laufzeit
 
     # Neue Regel (ab Oktober 2026): keine halbierten Anteile mehr, sondern die volle Differenz.
     # Der alte Sonderanteil gilt nur noch für Zeilen mit Haken in der Spalte "Alte Regel".
+    # Feste Absprachen (FEST_ANTEIL in team.py) gelten für alle Zeilen ohne Haken bei "Alte Regel".
     if alte_regel and partner_key in ADELE_ANTEIL_OVERRIDE:
         quote = ADELE_ANTEIL_OVERRIDE[partner_key]
+    elif partner_key in FEST_ANTEIL:
+        quote = FEST_ANTEIL[partner_key]
     elif partner_key == LEITER_KEY:
         quote = ADELE_QUOTE
     else:
@@ -107,7 +130,7 @@ st.markdown(
     ">
         <img src="data:image/png;base64,{LOGO_BASE64}" style="width:64px; height:64px; border-radius:12px;">
         <div>
-            <div style="color:white; font-size:30px; font-weight:700; line-height:1.2;">Umsatz Rechner</div>
+            <div style="color:white; font-size:30px; font-weight:700; line-height:1.2;">{APP_TITEL}</div>
             <div style="color:#F3E4D3; font-size:14px; margin-top:4px;">
                 Liest deine Geschäfts-Übersicht ein und berechnet Wohlstandspunkte (WP) + Auszahlung automatisch.
             </div>

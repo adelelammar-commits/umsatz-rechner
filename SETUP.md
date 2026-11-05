@@ -56,6 +56,26 @@ SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/<ID>/export?format=csv&g
 COURTAGE_KEY = "<von Adele>"
 ```
 
+## Volle App für einen Leiter aus deinem Team (ohne eigenen Fork)
+
+Dieselbe `app.py` kann für eine andere Person laufen (z. B. Emirhan mit eigenem Team): eigenes Deployment
+(Datei `app.py`), eigene Tabelle, und in deren Secrets zusätzlich `APP_TITEL`, `LEITER_KEY`, `LEITER_QUOTE` und
+ganz unten die Tabelle `[TEAM_QUOTEN]` (optional auch `[ANTEIL_OVERRIDE]`, `[FEST_ANTEIL]`). Dann wird `team.py`
+für diese App ignoriert. Bei `SHEET_CSV_URL` auf die richtige `gid` achten (Zahl hinter `#gid=` in der Tabellen-Adresse).
+
+```toml
+APP_PASSWORD = "..."
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/<ID>/export?format=csv&gid=<GID>"
+COURTAGE_KEY = "<von Adele>"
+APP_TITEL = "Emirhans Umsatz Rechner"
+LEITER_KEY = "emirhan"
+LEITER_QUOTE = 0.55
+
+[TEAM_QUOTEN]
+emirhan = 0.55
+soner = 0.20   # Stufe 1 (alle weiteren Partner unter Emirhan ebenfalls 0.20)
+```
+
 ## Persönliche App für einzelne Partner (optional)
 
 `mein_umsatz.py` zeigt einer Person nur ihr eigenes Geschäft. Pro Person ein eigener Git-Branch plus eigenes Deployment
