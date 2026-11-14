@@ -196,6 +196,10 @@ if df is not None:
             zeile["Ausgezahlt"] = ausgezahlt
         alle_zeilen.extend(zeilen)
 
+    if not alle_zeilen:
+        st.info("Die Tabelle enthält noch keine Geschäfte. Sobald Zeilen eingetragen sind, erscheint hier die Auswertung.")
+        st.stop()
+
     ergebnis_df = pd.DataFrame(alle_zeilen)
     ergebnis_df = ergebnis_df.sort_values(["Vertriebspartner", "Name Kunde"]).reset_index(drop=True)
 
