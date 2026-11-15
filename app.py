@@ -235,9 +235,16 @@ if df is not None:
     col2.metric("🟡 Ausstehende Vergütung (eingereicht)", f"{ausstehend:,.2f} €")
     col3.metric("🔵 Vergütung offenes Geschäft", f"{offen_summe:,.2f} €")
 
-    col4, col5 = st.columns(2)
-    col4.metric("Gesamt-WP", f"{gesamt_wp:,.2f}")
-    col5.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
+    def wp_status(status):
+        return berechnet[berechnet["Status"] == status]["WP"].sum()
+
+    w0, w1, w2, w3 = st.columns(4)
+    w0.metric("⭐ Gesamt-WP", f"{gesamt_wp:,.2f}")
+    w1.metric("✅ WP policiert", f"{wp_status('policiert'):,.2f}")
+    w2.metric("🟡 WP eingereicht", f"{wp_status('eingereicht'):,.2f}")
+    w3.metric("🔵 WP offen", f"{wp_status('offen'):,.2f}")
+
+    st.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
 
     st.divider()
     st.subheader("👥 Meine Geschäftspartner: Umsatz und WP")
