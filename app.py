@@ -240,6 +240,61 @@ if df is not None:
     col5.metric("Zeilen mit offenen Fragen", int((ergebnis_df["Hinweis"] != "").sum()))
 
     st.divider()
+    st.subheader("👥 Meine Geschäftspartner: Umsatz und WP")
+    st.caption("Umsatz = Summe der Beiträge, WP = Wohlstandspunkte der Geschäfte. Folgt dem Monatsfilter oben.")
+    # Gleiche Person mit unterschiedlicher Schreibweise (z.B. Büşra/Büsra) zusammenfassen.
+    gp = berechnet.assign(
+        Vertriebspartner=berechnet["Vertriebspartner"].str.strip().str.replace("ş", "s").str.replace("Ş", "S").str.title()
+    )
+    if gp.empty:
+        st.info("Für diese Auswahl gibt es noch keine berechneten Geschäfte.")
+    else:
+        def _summe(teil, status=None):
+            if status:
+                teil = teil[teil["Status"] == status]
+            return teil
+
+        gp_zeilen = []
+        for partner, teil in gp.groupby("Vertriebspartner"):
+            pol_t = _summe(teil, "policiert")
+            gp_zeilen.append({
+                "Vertriebspartner": partner,
+                "Verträge": len(teil),
+                "Umsatz gesamt (€)": teil["Beitrag (€)"].sum(),
+                "WP gesamt": teil["WP"].sum(),
+                "Umsatz policiert (€)": pol_t["Beitrag (€)"].sum(),
+                "WP policiert": pol_t["WP"].sum(),
+                "WP eingereicht": _summe(teil, "eingereicht")["WP"].sum(),
+                "WP offen": _summe(teil, "offen")["WP"].sum(),
+            })
+        gp_df = pd.DataFrame(gp_zeilen).sort_values("WP gesamt", ascending=False).reset_index(drop=True)
+
+        g1, g2, g3 = st.columns(3)
+        g1.metric("Geschäftspartner mit Geschäften", len(gp_df))
+        g2.metric("Umsatz aller Partner", f"{gp_df['Umsatz gesamt (€)'].sum():,.2f} €")
+        g3.metric("WP aller Partner", f"{gp_df['WP gesamt'].sum():,.2f}")
+
+        gp_config = {c: st.column_config.NumberColumn(c, format="%.2f €") for c in gp_df.columns if "(€)" in c}
+        gp_config.update({c: st.column_config.NumberColumn(c, format="%.2f") for c in gp_df.columns if c.startswith("WP")})
+        st.dataframe(gp_df, use_container_width=True, hide_index=True, column_config=gp_config)
+
+        st.caption("WP pro Geschäftspartner")
+        st.bar_chart(gp_df.set_index("Vertriebspartner")[["WP policiert", "WP eingereicht", "WP offen"]])
+
+        partner_wahl = st.selectbox("🔍 Geschäfte eines Partners ansehen", ["–"] + gp_df["Vertriebspartner"].tolist())
+        if partner_wahl != "–":
+            einzel = gp[gp["Vertriebspartner"] == partner_wahl].copy()
+            einzel["Status"] = einzel["Status"].map(STATUS_LABEL).fillna(einzel["Status"])
+            st.dataframe(
+                einzel[["Name Kunde", "Monat", "Produkt", "Beitrag (€)", "WP", "Status"]].sort_values(["Monat", "Name Kunde"]),
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "Beitrag (€)": st.column_config.NumberColumn("Umsatz (€)", format="%.2f €"),
+                    "WP": st.column_config.NumberColumn("WP", format="%.2f"),
+                },
+            )
+
+    st.divider()
     st.subheader("💸 Auszahlungs-Checkliste")
     st.caption(
         "Abgeschlossenes (policiertes) Geschäft. Abgehakt wird direkt in deiner Google-Tabelle in der Spalte "
